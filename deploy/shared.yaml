@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Resources:
+
+  NotebookInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        -
+          PolicyName: InstancePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              -
+                Sid: GetBootstrapScripts
+                Effect: Allow
+                Action: 
+                  - ecs:*
+                Resource: *
+              -
+                Sid: CloudwatchLogging
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStream
+                Resource:
+                  - arn:aws:logs:*:*:*
+
+  NotebookInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - Ref: NotebookInstanceRole
+  
+Outputs:
+
+  NotebookInstanceRole:
+    Description: Name of NotebookInstanceRole
+    Value: !Ref NotebookInstanceRole
+    Export:
+      Name: !Sub ${AWS::StackName}-NotebookInstanceRole
+
+  NotebookInstanceProfile:
+    Description: Name of NotebookInstanceProfile
+    Value: !Ref NotebookInstanceProfile
+    Export: 
+      Name: !Sub ${AWS::StackName}-NotebookInstanceProfile

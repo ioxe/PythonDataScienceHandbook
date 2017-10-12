@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t2.small
+  
+  NginxMemory:
+    Type: Number
+    Default: 200
+
+  AppMemory:
+    Type: Number
+    Default: 1800
+  
+  InstanceAMI:
+    Type: String
+    Default: ami-e9e22591
+
+  VpcId:
+    Type: String
+    Default: vpc-859b03e3
+  
+  SharedResourcesStackName:
+    Type: String
+    Default: iox-PythonDataScienceHandbook-shared
+
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+  
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Open port 80
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+  
+  CloudwatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub ECSLogGroup${AWS::StackName},
+      RetentionDays: 14
+
+  NotebookInstanceTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-app
+      ContainerDefinitions:
+        - Name: app
+          Cpu: 1000
+          Image: iox/PythonDataScienceHandbook
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudwatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: app
+          Memory: !Ref AppMemory
+        - Name: nginx
+          Image: iox/Nginx
+          Links: 
+            - app
+          PortMappings:
+            ContainerPort: 80
+            HostPort: 80
+          Memory: !Ref NginxMemory
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudwatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: nginx
+
+  Instance: 
+      Type: AWS::EC2::Instance
+      Properties: 
+        ImageId: !Ref InstanceAMI
+        KeyName: dev
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile: !ImportValue
+              Fn::Sub: ${SharedResourcesStackName}-NotebookInstanceProfile
+        BlockDeviceMappings:
+          - DeviceName: /dev/sdb
+            Ebs:
+              VolumeSize: 8
+        SecurityGroupIds:
+          - !GetAtt NotebookInstanceSecurityGroup.GroupId
+        UserData:
+          Fn::Base64:
+            !Sub |
+              #!/bin/bash -xe
+              echo "ECS_CLUSTER=${ClusterName}" >> /etc/ecs/ecs.config"
+
+    
+
+    
+
+  
+
+ 
+Outputs:
+  URL:
+    Description: THE URL For the app
+    Value: !GetAtt NotebookInstance.PublicDnsName

@@ -1,0 +1,10 @@
+version: '2'
+services:
+  app:
+    build: app
+  nginx:
+    build: nginx
+    links:
+      - app
+    ports:
+      - 5000:443
