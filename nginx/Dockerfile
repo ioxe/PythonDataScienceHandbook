@@ -2,10 +2,13 @@ FROM nginx
 
 ADD nginx.conf /etc/nginx/nginx.conf
 
-ADD server.crt /etc/ssl/certs/ssl.crt
+ADD bundle.crt /etc/ssl/certs/ssl.crt
 
-ADD server.key /etc/ssl/certs/ssl.key
+ADD *.ioxstore.com.key /etc/ssl/certs/ssl.key
 
-EXPOSE 80
+ADD alphasslintermediate.pem /etc/ssl/certs/alphasslintermediate.pem
 
-EXPOSE 443
+ADD *.ioxstore.com.dhparam.pem /etc/ssl/certs/dhparam.pem
+
+EXPOSE 80 443
+
