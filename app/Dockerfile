@@ -1,5 +1,7 @@
 FROM python:3.5.4-jessie
 
+USER root
+
 WORKDIR /app
 
 COPY ./app/requirements.txt requirements.txt
@@ -16,4 +18,4 @@ COPY ./notebooks /notebooks
 
 RUN echo jupyter notebook --version
 
-CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--no-browser", "--allow-root", "--port=8888", "--notebook-dir=/notebooks"]
+CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--no-browser", "--allow-root", "--port=8888", "--notebook-dir=/notebooks", "--NotebookApp.token=''"]
