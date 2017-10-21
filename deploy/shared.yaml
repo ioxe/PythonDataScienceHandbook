@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Resources:
 
-  NotebookInstanceRole:
+  EcsInstanceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -25,8 +25,17 @@ Resources:
                 Sid: GetBootstrapScripts
                 Effect: Allow
                 Action: 
-                  - ecs:*
-                Resource: *
+                  - ecs:DeregisterContainerInstance
+                  - ecs:DiscoverPollEndpoint
+                  - ecs:Poll
+                  - ecs:RegisterContainerInstance
+                  - ecs:StartTelemetrySession
+                  - ecs:Submit*
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: "*"
               -
                 Sid: CloudwatchLogging
                 Effect: Allow
@@ -38,22 +47,16 @@ Resources:
                 Resource:
                   - arn:aws:logs:*:*:*
 
-  NotebookInstanceProfile:
+  EcsInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
-        - Ref: NotebookInstanceRole
+        - Ref: EcsInstanceRole
   
 Outputs:
 
-  NotebookInstanceRole:
-    Description: Name of NotebookInstanceRole
-    Value: !Ref NotebookInstanceRole
+  EcsInstanceRole:
+    Description: Name of EcsInstanceProfile
+    Value: !Ref EcsInstanceRole
     Export:
-      Name: !Sub ${AWS::StackName}-NotebookInstanceRole
-
-  NotebookInstanceProfile:
-    Description: Name of NotebookInstanceProfile
-    Value: !Ref NotebookInstanceProfile
-    Export: 
-      Name: !Sub ${AWS::StackName}-NotebookInstanceProfile
+      Name: !Sub ${AWS::StackName}-EcsInstanceProfile

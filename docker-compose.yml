@@ -4,10 +4,14 @@ services:
     build: 
         context: ./
         dockerfile: ./app/Dockerfile
-  nginx:
-    build: nginx
+    volumes:
+      - /notebooks:/notebooks
+  proxy:
+    build: proxy
     links:
       - app
     ports:
       - 443:443
       - 80:80
+    volumes:
+      - '/etc/ssl/certs:/etc/ssl/certs'

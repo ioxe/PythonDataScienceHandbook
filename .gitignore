@@ -105,3 +105,6 @@ notebooks/hello.png
 *.key
 *.crt
 *.pem
+
+.vscode
+.DS_Store

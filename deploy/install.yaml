@@ -1,45 +1,64 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
 Parameters:
-  InstanceType:
+  EcsInstanceType:
     Type: String
     Default: t2.small
   
-  NginxMemory:
+  EcsAmiId:
+    Type: String
+    Default: ami-ef4e8d97
+
+  ProxyMemory:
     Type: Number
     Default: 200
 
+  AppCpu:
+    Type: Number
+    Default: 1000
+  
   AppMemory:
     Type: Number
     Default: 1800
   
-  InstanceAMI:
-    Type: String
-    Default: ami-e9e22591
-
   VpcId:
     Type: String
     Default: vpc-859b03e3
   
   SharedResourcesStackName:
     Type: String
-    Default: iox-PythonDataScienceHandbook-shared
+    Default: PythonDataScienceHandbook-shared-9ybk19jw
+
+  AuthEndpoint:
+    Type: String
+    Default:  https://zezxvgcqil.execute-api.us-west-2.amazonaws.com/LATEST/auth
+
+  SubdomainGeneratorArn:
+    Type: String
+    Default: arn:aws:lambda:us-west-2:734647034472:function:store-SubdomainGenerator-1PA6RB1F1Q0Q8
 
 Resources:
-  ECSCluster:
+  EcsCluster:
     Type: AWS::ECS::Cluster
   
-  ECSSecurityGroup:
+  EcsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Open port 80
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-      - IpProtocol: tcp
+      - 
+        IpProtocol: tcp
         FromPort: 80
         ToPort: 80
         CidrIp: 0.0.0.0/0
-      - IpProtocol: tcp
+      - 
+        IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - 
+        IpProtocol: tcp
         FromPort: 22
         ToPort: 22
         CidrIp: 0.0.0.0/0
@@ -47,17 +66,30 @@ Resources:
   CloudwatchLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub ECSLogGroup${AWS::StackName},
-      RetentionDays: 14
+      LogGroupName: !Sub ECSLogGroup${AWS::StackName}
+      RetentionInDays: 14
 
-  NotebookInstanceTask:
+  EcsService: 
+    Type: AWS::ECS::Service
+    DependsOn: 
+      - EcsCluster
+    Properties: 
+      Cluster: !Ref EcsCluster
+      DesiredCount: 1
+      TaskDefinition: !Ref EcsTask
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub ${AWS::StackName}-app
       ContainerDefinitions:
-        - Name: app
-          Cpu: 1000
-          Image: iox/PythonDataScienceHandbook
+        - 
+          Name: app
+          Cpu: !Ref AppCpu
+          Image: girishnanda/pds:v0.0.2
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -65,49 +97,103 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: app
           Memory: !Ref AppMemory
-        - Name: nginx
-          Image: iox/Nginx
+          MountPoints:
+            - 
+              ContainerPath: /notebooks
+              SourceVolume: notebooks 
+        - 
+          Name: proxy
+          Image: girishnanda/pdsproxy:v0.0.6
           Links: 
             - app
           PortMappings:
-            ContainerPort: 80
-            HostPort: 80
-          Memory: !Ref NginxMemory
+            - 
+              ContainerPort: 80
+              HostPort: 80
+            - 
+              ContainerPort: 443
+              HostPort: 443
+          Memory: !Ref ProxyMemory
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref CloudwatchLogsGroup
               awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: nginx
+              awslogs-stream-prefix: proxy
+          MountPoints:
+            - 
+              ContainerPath: /etc/ssl/certs
+              SourceVolume: ssl
+          Environment:
+            -
+              Name: AUTH_ENDPOINT
+              Value: !Ref AuthEndpoint         
+      Volumes:
+        -
+          Host:
+            SourcePath: /notebooks
+          Name: notebooks
+        - Host:
+            SourcePath: /etc/ssl/certs
+          Name: ssl
 
-  Instance: 
-      Type: AWS::EC2::Instance
+  LaunchConfiguration: 
+      Type: AWS::AutoScaling::LaunchConfiguration
+      Metadata:
+          AWS::CloudFormation::Init:
+            config:           
+              commands:
+                01_set_drive_as_swap:
+                  command: sudo mkswap /dev/xvdb
+                  test: ! sudo swapon -s | grep -q /dev/xvdb
+                02_set_swap_on:
+                  command: sudo swapon /dev/xvdb
+                  test: ! sudo swapon -s | grep -q /dev/xvdb
       Properties: 
-        ImageId: !Ref InstanceAMI
+        ImageId: !Ref EcsAmiId
         KeyName: dev
-        InstanceType: !Ref InstanceType
+        InstanceType: !Ref EcsInstanceType
         IamInstanceProfile: !ImportValue
-              Fn::Sub: ${SharedResourcesStackName}-NotebookInstanceProfile
+          Fn::Sub: ${SharedResourcesStackName}-EcsInstanceProfile
         BlockDeviceMappings:
-          - DeviceName: /dev/sdb
+          - 
+            DeviceName: /dev/sdb
             Ebs:
               VolumeSize: 8
-        SecurityGroupIds:
-          - !GetAtt NotebookInstanceSecurityGroup.GroupId
+        SecurityGroups:
+          - Ref: EcsSecurityGroup
         UserData:
-          Fn::Base64:
-            !Sub |
-              #!/bin/bash -xe
-              echo "ECS_CLUSTER=${ClusterName}" >> /etc/ecs/ecs.config"
+          Fn::Base64: !Sub |
+           #!/bin/bash
+           yum -y update
+           yum install -y aws-cfn-bootstrap
+           /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region}
+           echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
+  ASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: EcsCluster
+    Properties:
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      AvailabilityZones: 
+        Fn::GetAZs: !Ref AWS::Region
+      MinSize: '0'
+      MaxSize: '1'
+      DesiredCapacity: '1'
+      Tags:
+        -
+          Key: Name
+          Value: !Sub ECS Instance - ${AWS::StackName}
+          PropagateAtLaunch: 'true'
+  SubdomainGenerator:
+    Type: Custom::SubdomainGenerator
+    DependsOn: EcsService
+    Properties:
+      ServiceToken: !Ref SubdomainGeneratorArn
+      Region: !Ref AWS::Region
+      AutoScalingGroupName: !Ref ASG
+      StackName: !Ref AWS::StackName
 
-    
-
-    
-
-  
-
- 
 Outputs:
-  URL:
-    Description: THE URL For the app
-    Value: !GetAtt NotebookInstance.PublicDnsName
+  Url:
+    Description: Name of url for app
+    Value: !Sub https://${AWS::StackName}.ioxstore.com

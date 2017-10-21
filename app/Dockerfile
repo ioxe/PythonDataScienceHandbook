@@ -14,8 +14,6 @@ WORKDIR ~
 
 COPY ./app/custom.js ~/.jupyter/custom/custom.js
 
-COPY ./notebooks /notebooks
-
 RUN echo jupyter notebook --version
 
 CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--no-browser", "--allow-root", "--port=8888", "--notebook-dir=/notebooks", "--NotebookApp.token=''"]
