@@ -19,7 +19,7 @@ RUN pip3 install -r requirements.txt
 
 RUN pip install https://github.com/matplotlib/basemap/archive/v1.1.0.tar.gz psutil
 
-COPY ./notebooks notebooks
+# COPY ./notebooks notebooks
 
 WORKDIR notebooks
 
@@ -27,7 +27,5 @@ RUN curl https://s3.amazonaws.com/openrecipes/20170107-061401-recipeitems.json.g
 && curl -o FremontBridge.csv https://data.seattle.gov/api/views/65db-xm6k/rows.csv?accessType=DOWNLOAD \
 && curl -O https://raw.githubusercontent.com/jakevdp/marathon-data/master/marathon-data.csv \
 && curl -O https://data.giss.nasa.gov/pub/gistemp/gistemp250.nc.gz && gunzip gistemp250.nc.gz
-
-EXPOSE 8888
 
 CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--no-browser", "--allow-root", "--port=8888", "--notebook-dir=/app/notebooks", "--NotebookApp.token=''"]
