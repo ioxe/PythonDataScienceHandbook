@@ -1,0 +1,37 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: pds-5555
+spec:
+  template:
+    metadata:
+      labels:
+        app: pds-5555
+    spec:
+      initContainers:
+      - name: pds-5555-data
+        image: girishnanda/pdsdata:0.0.2
+        command: ["/bin/sh"]
+        args: ["-c", "if ! [ -d /pv/data ]; then cp -R /seed /pv/data; fi"]
+        volumeMounts: [
+          {
+            name: pds-5555-vol,
+            mountPath: /pv
+          }
+        ]
+      containers:
+      - name: pds-5555
+        image: girishnanda/pds:0.0.9
+        volumeMounts:
+        - name: pds-5555-vol
+          mountPath: /pv
+        resources:
+          limits:
+            memory: 1800Mi
+        ports:
+        - containerPort: 8888
+
+      volumes:
+        - name: pds-5555-vol
+          persistentVolumeClaim:
+            claimName: pds-5555-claim
