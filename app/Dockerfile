@@ -21,8 +21,7 @@ RUN pip install https://github.com/matplotlib/basemap/archive/v1.1.0.tar.gz psut
 
 ENV NOTEBOOK_DIR '/pv/data/notebooks'
 
-COPY ./notebooks notebooks
-
 EXPOSE 8888
 
-CMD ["bash", "-c", "jupyter notebook --no-browser --allow-root --ip=0.0.0.0 --port=8888 --notebook-dir=${NOTEBOOK_DIR} --NotebookApp.token=''"]
+ENTRYPOINT [ "sh" ]
+CMD ["-c", "jupyter notebook --no-browser --allow-root --ip=127.0.0.1 --port=8888 --notebook-dir=${NOTEBOOK_DIR} --NotebookApp.token=''"]

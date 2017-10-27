@@ -20,16 +20,26 @@ spec:
           }
         ]
       containers:
+      - name: pds-5555-proxy
+        image: girishnanda/pdsproxy:0.0.24
+        env:
+        - name: AUTH_ENDPOINT
+          value: https://zezxvgcqil.execute-api.us-west-2.amazonaws.com/LATEST/auth
+        - name: PROXY_URL
+          value: 'http://127.0.0.1:8888'
+        # resources:
+        #   limits:
+        #     memory: 50Mi
+        ports:
+        - containerPort: 80
       - name: pds-5555
-        image: girishnanda/pds:0.0.9
+        image: girishnanda/pds:0.0.17
         volumeMounts:
         - name: pds-5555-vol
           mountPath: /pv
         resources:
           limits:
             memory: 1800Mi
-        ports:
-        - containerPort: 8888
 
       volumes:
         - name: pds-5555-vol
