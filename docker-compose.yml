@@ -1,17 +1,16 @@
 version: '2'
 services:
   app:
+    environment:
+      - NOTEBOOK_DIR=./
     build: 
         context: ./
         dockerfile: ./app/Dockerfile
-    volumes:
-      - /notebooks:/notebooks
   proxy:
+    environment:
+      - PROXY_URL=http://app:8888
     build: proxy
     links:
       - app
     ports:
-      - 443:443
-      - 80:80
-    volumes:
-      - '/etc/ssl/certs:/etc/ssl/certs'
+      - 4500:80

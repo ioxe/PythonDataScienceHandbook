@@ -108,3 +108,5 @@ notebooks/hello.png
 
 .vscode
 .DS_Store
+
+tmp

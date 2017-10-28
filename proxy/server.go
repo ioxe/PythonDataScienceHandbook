@@ -13,7 +13,7 @@ import (
 	"io"	
 	"time"
 	"sync"	
-	"github.com/yhat/wsutil"	
+	"github.com/yhat/wsutil"
 )
 
 type AuthResponse struct {
@@ -24,15 +24,6 @@ type AuthResponse struct {
 type Sessions struct {
 	v   map[string]string
 	mux sync.Mutex
-}
-
-func redirectToHttps(w http.ResponseWriter, req *http.Request) {
-    target := "https://" + req.Host + req.URL.Path 
-    if len(req.URL.RawQuery) > 0 {
-        target += "?" + req.URL.RawQuery
-    }
-    log.Printf("redirect to: %s", target)
-    http.Redirect(w, req, target,http.StatusTemporaryRedirect)
 }
 
 func auth(client *http.Client, endpoint string, req *http.Request) (AuthResponse, error) {
@@ -96,17 +87,16 @@ func newUUID() (string, error) {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]), nil
 }
 
-func isSessionValid(r *http.Request, sessions Sessions) bool {
+func isSessionValid(r *http.Request, sessions *Sessions) bool {
 	sessionCookie, err := r.Cookie("App_session")
 	if err != nil {
+		fmt.Println("session cookie error")
+		fmt.Println(err)
 		return false
 	}
-	// fmt.Println("cookie received")
-	// fmt.Println(sessionCookie.Value)
 	sessions.mux.Lock()
+	defer sessions.mux.Unlock()
 	if val, ok := sessions.v[sessionCookie.Value]; ok { 
-		// fmt.Println("saved value in sessions")
-		// fmt.Println(val)
 		if val == sessionCookie.Value {
 			return true
 		} else {
@@ -116,11 +106,10 @@ func isSessionValid(r *http.Request, sessions Sessions) bool {
 			}
 		}
 	}
-	sessions.mux.Unlock()
 	return false
 }
 
-func setSessionIfExpired(w http.ResponseWriter, r *http.Request, sessions Sessions) {
+func setSessionIfExpired(w http.ResponseWriter, r *http.Request, sessions *Sessions) {
 	sessionCookieName := "App_session"
 	_, err := r.Cookie(sessionCookieName)
 	if err != nil {
@@ -137,12 +126,13 @@ func setSessionIfExpired(w http.ResponseWriter, r *http.Request, sessions Sessio
 }
 
 func serveProxy(httpReverseProxy *httputil.ReverseProxy, wsReverseProxy *wsutil.ReverseProxy, w http.ResponseWriter, r *http.Request) {
+	fmt.Println(r)
+	fmt.Println(w)
 	isWs := isWebsocket(r)
 	if isWs {
-		wsReverseProxy.ServeHTTP(w, r)
+		wsReverseProxy.ServeHTTP(w,r)
 		return
 	}
-
 	httpReverseProxy.ServeHTTP(w,r)
 }
 
@@ -154,15 +144,18 @@ func main() {
     client := &http.Client{Transport: tr}	
 	sessions := Sessions{ v: make(map[string]string), mux: sync.Mutex{}}
 	authEndpoint := os.Getenv("AUTH_ENDPOINT")
+	proxyUrl := os.Getenv("PROXY_URL")
+	fmt.Println(proxyUrl)
 	mux := http.NewServeMux()
-	url, _ := url.Parse("http://app:8888")	
+	url, _ := url.Parse(proxyUrl)	
 	httpReverseProxy := httputil.NewSingleHostReverseProxy(url)	
 	wsReverseProxy := wsutil.NewSingleHostReverseProxy(url)
 	
     mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 
-		sessionValid := isSessionValid(r, sessions)
+		sessionValid := isSessionValid(r, &sessions)
 		if sessionValid {
+			fmt.Println("Session valid")
 			serveProxy(httpReverseProxy, wsReverseProxy, w, r)
 			return
 		}
@@ -173,15 +166,15 @@ func main() {
 			http.Redirect(w, r, "/error", 302)	
 			return
 		}
-
+		fmt.Println(res.statusCode)
 		if res.statusCode == 200 {
-			setSessionIfExpired(w, r, sessions)
+			setSessionIfExpired(w, r, &sessions)
 			serveProxy(httpReverseProxy, wsReverseProxy, w, r)
 		} else {
 			fmt.Println(res.redirect)
 			http.Redirect(w, r, res.redirect, 302)	
 		}
-		
+
 	})
 	mux.HandleFunc("/unauthorized", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
@@ -191,23 +184,9 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("Unknown Server Error.\n"))
 	})
-    cfg := &tls.Config{
-        MinVersion:               tls.VersionTLS12,
-        CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-        PreferServerCipherSuites: true,
-        CipherSuites: []uint16{
-            tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-            tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-            tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-            tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-        },
-    }
 	srv := &http.Server{
-        Addr:         ":443",
-        Handler:      mux,
-        TLSConfig:    cfg,
-        TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
+        Addr:         "0.0.0.0:80",
+		Handler:      mux,
 	}
-    go http.ListenAndServe(":80", http.HandlerFunc(redirectToHttps))
-	log.Fatal(srv.ListenAndServeTLS("/etc/ssl/certs/ssl.crt", "/etc/ssl/certs/ssl.key"))
+	log.Fatal(srv.ListenAndServe())
 }

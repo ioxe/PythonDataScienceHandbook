@@ -1,0 +1,47 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: pds-5555
+spec:
+  template:
+    metadata:
+      labels:
+        app: pds-5555
+    spec:
+      initContainers:
+      - name: pds-5555-data
+        image: girishnanda/pdsdata:0.0.2
+        command: ["/bin/sh"]
+        args: ["-c", "if ! [ -d /pv/data ]; then cp -R /seed /pv/data; fi"]
+        volumeMounts: [
+          {
+            name: pds-5555-vol,
+            mountPath: /pv
+          }
+        ]
+      containers:
+      - name: pds-5555-proxy
+        image: girishnanda/pdsproxy:0.0.24
+        env:
+        - name: AUTH_ENDPOINT
+          value: https://zezxvgcqil.execute-api.us-west-2.amazonaws.com/LATEST/auth
+        - name: PROXY_URL
+          value: 'http://127.0.0.1:8888'
+        # resources:
+        #   limits:
+        #     memory: 50Mi
+        ports:
+        - containerPort: 80
+      - name: pds-5555
+        image: girishnanda/pds:0.0.17
+        volumeMounts:
+        - name: pds-5555-vol
+          mountPath: /pv
+        resources:
+          limits:
+            memory: 1800Mi
+
+      volumes:
+        - name: pds-5555-vol
+          persistentVolumeClaim:
+            claimName: pds-5555-claim
